@@ -26,7 +26,10 @@
       font-weight: bold;
       color: #555;
     }
-    select, input[type="datetime-local"], input[type="number"] {
+    input[type="text"],
+    select, 
+    input[type="datetime-local"], 
+    input[type="number"] {
       width: 100%;
       padding: 0.4rem;
       margin-top: 0.3rem;
@@ -81,6 +84,9 @@
 <body>
   <h1>自動車利用管理</h1>
   <form id="carUsageForm">
+    <label for="staffNumber">職員番号</label>
+    <input type="text" id="staffNumber" name="staffNumber" required placeholder="職員番号を入力してください" />
+
     <label for="carSelect">車両選択</label>
     <select id="carSelect" name="car" required>
       <option value="">-- 選択してください --</option>
@@ -129,6 +135,7 @@
   <pre id="message"></pre>
 
   <script>
+    const staffNumberInput = document.getElementById('staffNumber');
     const chooseStart = document.getElementById('chooseStart');
     const chooseEnd = document.getElementById('chooseEnd');
     const startTimeInput = document.getElementById('startTime');
@@ -141,7 +148,6 @@
     const message = document.getElementById('message');
     const form = document.getElementById('carUsageForm');
 
-    // ブラウザのローカルストレージに追記用データを保存・取得(ダウンロード用)
     function getStoredLog() {
       return localStorage.getItem('carUsageLog') || '';
     }
@@ -151,10 +157,8 @@
       localStorage.setItem('carUsageLog', newLog);
     }
 
-    // 活性/非活性切り替え関数
     function setDisabled(el, disabled) {
       if (el.length !== undefined) {
-        // NodeList or HTMLCollection
         for (const e of el) e.disabled = disabled;
       } else {
         el.disabled = disabled;
@@ -163,7 +167,6 @@
 
     function updateFormState() {
       if (chooseStart.checked) {
-        // 利用開始のみ入力可能
         startTimeInput.disabled = false;
         startNowBtn.disabled = false;
 
@@ -173,14 +176,13 @@
         endOnlyFields.style.display = 'none';
         setDisabled(distanceInput, true);
         setDisabled(fuelRadios, true);
-        // Clear end fields
+
         endTimeInput.value = '';
         distanceInput.value = '';
         for (const f of fuelRadios) {
           f.checked = false;
         }
       } else if (chooseEnd.checked) {
-        // 利用終了のみ入力可能
         startTimeInput.disabled = true;
         startNowBtn.disabled = true;
 
@@ -190,14 +192,12 @@
         endOnlyFields.style.display = 'block';
         setDisabled(distanceInput, false);
         setDisabled(fuelRadios, false);
-        // 給油は必須にして「未選択」はなしなので、最初は未選択の状態にしない
+
         for (const f of fuelRadios) {
           f.checked = false;
         }
-        // Clear start field
         startTimeInput.value = '';
       } else {
-        // どちらも選択なしなら全部無効
         startTimeInput.disabled = true;
         startNowBtn.disabled = true;
         startTimeInput.value = '';
@@ -217,7 +217,6 @@
 
     function getNowISOStringLocal() {
       const dt = new Date();
-      // ローカル日時をISO形式yyyy-MM-ddTHH:mmで返す
       const pad = v => v.toString().padStart(2, '0');
       const yyyy = dt.getFullYear();
       const MM = pad(dt.getMonth() + 1);
@@ -237,16 +236,19 @@
       endTimeInput.value = getNowISOStringLocal();
     });
 
-    // 初期化
     updateFormState();
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
 
+      const staffNumber = staffNumberInput.value.trim();
       const car = form.car.value;
       const usageType = form.usageType.value;
-      const timestamp = new Date().toISOString();
 
+      if (!staffNumber) {
+        alert('職員番号を入力してください。');
+        return;
+      }
       if (!car) {
         alert('車両を選択してください。');
         return;
@@ -282,7 +284,6 @@
           return;
         }
 
-        // 給油の有無は必須なのでチェック
         fuel = Array.from(fuelRadios).find(r => r.checked)?.value || '';
         if (fuel === '') {
           alert('利用終了時は給油の有無を選択してください。');
@@ -290,16 +291,14 @@
         }
       }
 
-      // カンマ区切り、項目名は不要、未選択燃料は含めない（未選択なしなので不要）
-      // 順序: 車両, 利用タイプ(start/end), 利用日時, 距離(利用終了のみ), 給油(利用終了のみ)
-      let lineParts = [car, usageType, usageDateTime];
+      // 職員番号,車両,利用タイプ,start/end,利用日時,走行距離(利用終了のみ),給油(利用終了のみ)
+      let lineParts = [staffNumber, car, usageType, usageDateTime];
       if (usageType === 'end') {
         lineParts.push(distance);
         lineParts.push(fuel);
       }
       const line = lineParts.join(',');
 
-      // ローカルストレージに追記
       const current = getStoredLog();
       const newLog = current ? current + '\n' + line : line;
       localStorage.setItem('carUsageLog', newLog);
@@ -308,7 +307,6 @@
         '登録内容（CSV形式1行）をローカルストレージに保存しました。\n\n' + line +
         '\n\n「output.txt」ファイルをダウンロードしてください。';
 
-      // localStorageの内容をダウンロード用テキスト作成
       const blob = new Blob([newLog], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
