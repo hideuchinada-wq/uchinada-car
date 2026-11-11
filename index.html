@@ -1,1 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>自動車利用管理アプリ</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background-color: #f7f7f7;
+    }
+    h1 {
+      color: #333;
+    }
+    form {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 400px;
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+      font-weight: bold;
+      color: #555;
+    }
+    select, input[type="datetime-local"], input[type="number"] {
+      width: 100%;
+      padding: 0.4rem;
+      margin-top: 0.3rem;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    .inline-group {
+      margin-top: 0.3rem;
+    }
+    .inline-group label {
+      font-weight: normal;
+      margin-right: 1rem;
+    }
+    button, .small-button {
+      margin-top: 1.5rem;
+      padding: 0.6rem 1.2rem;
+      background-color: #007bff;
+      border: none;
+      color: white;
+      font-size: 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover, .small-button:hover {
+      background-color: #0056b3;
+    }
+    .small-button {
+      font-size: 0.85rem;
+      padding: 0.3rem 0.7rem;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+    #message {
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      font-family: monospace;
+      background: #e9ecef;
+      border-radius: 4px;
+      padding: 0.8rem;
+      color: #2a2a2a;
+      max-width: 400px;
+      overflow-wrap: break-word;
+    }
+    .disabled {
+      background-color: #eee;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <h1>自動車利用管理</h1>
+  <form id="carUsageForm">
+    <label for="carSelect">車両選択</label>
+    <select id="carSelect" name="car" required>
+      <option value="">-- 選択してください --</option>
+      <option value="車1">車1</option>
+      <option value="車2">車2</option>
+      <option value="車3">車3</option>
+      <option value="車4">車4</option>
+      <option value="車5">車5</option>
+      <option value="車6">車6</option>
+      <option value="車7">車7</option>
+      <option value="車8">車8</option>
+      <option value="車9">車9</option>
+      <option value="車10">車10</option>
+    </select>
 
+    <label>利用開始 / 利用終了（どちらか一方のみ入力）</label>
+
+    <div style="display:flex; align-items:center; gap: 0.3rem;">
+      <input type="radio" id="chooseStart" name="usageType" value="start" required />
+      <label for="chooseStart" style="margin:0;">利用開始</label>
+      <input type="datetime-local" id="startTime" name="startTime" disabled />
+      <button type="button" id="startNowBtn" class="small-button" disabled>今の日時取得</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap: 0.3rem; margin-top: 0.7rem;">
+      <input type="radio" id="chooseEnd" name="usageType" value="end" />
+      <label for="chooseEnd" style="margin:0;">利用終了</label>
+      <input type="datetime-local" id="endTime" name="endTime" disabled />
+      <button type="button" id="endNowBtn" class="small-button" disabled>今の日時取得</button>
+    </div>
+
+    <div id="endOnlyFields" style="display:none;">
+      <label for="distance">走行距離 (km)</label>
+      <input type="number" id="distance" name="distance" min="0" step="0.1" placeholder="例: 12.3" disabled />
+
+      <label>給油の有無</label>
+      <div class="inline-group">
+        <label><input type="radio" name="fuel" value="有" disabled /> 有</label>
+        <label><input type="radio" name="fuel" value="無" disabled /> 無</label>
+        <label><input type="radio" name="fuel" value="" checked disabled /> 未選択</label>
+      </div>
+    </div>
+
+    <button type="submit">登録</button>
+  </form>
+
+  <pre id="message"></pre>
+
+  <script>
+    const chooseStart = document.getElementById('chooseStart');
+    const chooseEnd = document.getElementById('chooseEnd');
+    const startTimeInput = document.getElementById('startTime');
+    const endTimeInput = document.getElementById('endTime');
+    const startNowBtn = document.getElementById('startNowBtn');
+    const endNowBtn = document.getElementById('endNowBtn');
+    const endOnlyFields = document.getElementById('endOnlyFields');
+    const distanceInput = document.getElementById('distance');
+    const fuelRadios = document.getElementsByName('fuel');
+    const message = document.getElementById('message');
+    const form = document.getElementById('carUsageForm');
+
+    // 活性/非活性切り替え関数
+    function setDisabled(el, disabled) {
+      if (el.length !== undefined) {
+        // NodeList or HTMLCollection
+        for (const e of el) e.disabled = disabled;
+      } else {
+        el.disabled = disabled;
+      }
+    }
+
+    function updateFormState() {
+      if (chooseStart.checked) {
+        // 利用開始のみ入力可能
+        startTimeInput.disabled = false;
+        startNowBtn.disabled = false;
+
+        endTimeInput.disabled = true;
+        endNowBtn.disabled = true;
+
+        endOnlyFields.style.display = 'none';
+        setDisabled(distanceInput, true);
+        setDisabled(fuelRadios, true);
+        // Clear end fields
+        endTimeInput.value = '';
+        distanceInput.value = '';
+        for (const f of fuelRadios) {
+          f.checked = f.value === '';
+        }
+      } else if (chooseEnd.checked) {
+        // 利用終了のみ入力可能
+        startTimeInput.disabled = true;
+        startNowBtn.disabled = true;
+
+        endTimeInput.disabled = false;
+        endNowBtn.disabled = false;
+
+        endOnlyFields.style.display = 'block';
+        setDisabled(distanceInput, false);
+        setDisabled(fuelRadios, false);
+        // Clear start field
+        startTimeInput.value = '';
+      } else {
+        // どちらも選択なしなら全部無効
+        startTimeInput.disabled = true;
+        startNowBtn.disabled = true;
+        startTimeInput.value = '';
+        endTimeInput.disabled = true;
+        endNowBtn.disabled = true;
+        endTimeInput.value = '';
+
+        endOnlyFields.style.display = 'none';
+        setDisabled(distanceInput, true);
+        distanceInput.value = '';
+        setDisabled(fuelRadios, true);
+        for (const f of fuelRadios) {
+          f.checked = f.value === '';
+        }
+      }
+    }
+
+    function getNowISOStringLocal() {
+      const dt = new Date();
+      // ISOのタイムゾーン情報は外し、ローカルの日時をISO形式に変換(yyyy-MM-ddTHH:mm)
+      const pad = v => v.toString().padStart(2, '0');
+      const yyyy = dt.getFullYear();
+      const MM = pad(dt.getMonth() + 1);
+      const dd = pad(dt.getDate());
+      const HH = pad(dt.getHours());
+      const mm = pad(dt.getMinutes());
+      return `${yyyy}-${MM}-${dd}T${HH}:${mm}`;
+    }
+
+    chooseStart.addEventListener('change', updateFormState);
+    chooseEnd.addEventListener('change', updateFormState);
+
+    startNowBtn.addEventListener('click', () => {
+      startTimeInput.value = getNowISOStringLocal();
+    });
+    endNowBtn.addEventListener('click', () => {
+      endTimeInput.value = getNowISOStringLocal();
+    });
+
+    // 初期化
+    updateFormState();
+
+    // テキストデータを作成する関数
+    function formatData(data) {
+      return (
+        `登録日時: ${data.timestamp}\n` +
+        `車両: ${data.car}\n` +
+        `利用タイプ: ${data.usageType === 'start' ? '利用開始' : '利用終了'}\n` +
+        `日時: ${data.usageDateTime}\n` +
+        (data.usageType === 'end'
+          ? `走行距離: ${data.distance} km\n給油の有無: ${data.fuel}\n`
+          : '') +
+        '-----\n'
+      );
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const car = form.car.value;
+      const usageType = form.usageType.value;
+      const timestamp = new Date().toISOString();
+
+      if (!car) {
+        alert('車両を選択してください。');
+        return;
+      }
+      if (!usageType) {
+        alert('利用開始か利用終了を選択してください。');
+        return;
+      }
+
+      let usageDateTime;
+      if (usageType === 'start') {
+        usageDateTime = startTimeInput.value;
+        if (!usageDateTime) {
+          alert('利用開始の日時を入力してください。');
+          return;
+        }
+      } else {
+        usageDateTime = endTimeInput.value;
+        if (!usageDateTime) {
+          alert('利用終了の日時を入力してください。');
+          return;
+        }
+      }
+
+      let distance = null;
+      let fuel = '';
+
+      if (usageType === 'end') {
+        const distanceRaw = distanceInput.value;
+        distance = distanceRaw ? parseFloat(distanceRaw) : null;
+        if (distance === null || isNaN(distance)) {
+          alert('利用終了時は走行距離を入力してください。');
+          return;
+        }
+
+        for(const f of fuelRadios) {
+          if(f.checked) {
+            fuel = f.value;
+            break;
+          }
+        }
+        if (fuel === '') {
+          alert('利用終了時は給油の有無を選択してください。');
+          return;
+        }
+      }
+
+      const data = {
+        car,
+        usageType,
+        usageDateTime,
+        distance,
+        fuel,
+        timestamp,
+      };
+
+      const textData = formatData(data);
+
+      message.textContent = textData;
+
+      // ダウンロードファイル名
+      const fileName = `${car.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp.replace(/[:.]/g, '-')}.txt`;
+
+      const blob = new Blob([textData], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
