@@ -118,9 +118,8 @@
 
       <label>給油の有無</label>
       <div class="inline-group">
-        <label><input type="radio" name="fuel" value="有" disabled /> 有</label>
+        <label><input type="radio" name="fuel" value="有" disabled required /> 有</label>
         <label><input type="radio" name="fuel" value="無" disabled /> 無</label>
-        <label><input type="radio" name="fuel" value="" checked disabled /> 未選択</label>
       </div>
     </div>
 
@@ -141,6 +140,16 @@
     const fuelRadios = document.getElementsByName('fuel');
     const message = document.getElementById('message');
     const form = document.getElementById('carUsageForm');
+
+    // ブラウザのローカルストレージに追記用データを保存・取得(ダウンロード用)
+    function getStoredLog() {
+      return localStorage.getItem('carUsageLog') || '';
+    }
+    function appendStoredLog(line) {
+      const current = getStoredLog();
+      const newLog = current ? current + '\n' + line : line;
+      localStorage.setItem('carUsageLog', newLog);
+    }
 
     // 活性/非活性切り替え関数
     function setDisabled(el, disabled) {
@@ -168,7 +177,7 @@
         endTimeInput.value = '';
         distanceInput.value = '';
         for (const f of fuelRadios) {
-          f.checked = f.value === '';
+          f.checked = false;
         }
       } else if (chooseEnd.checked) {
         // 利用終了のみ入力可能
@@ -181,6 +190,10 @@
         endOnlyFields.style.display = 'block';
         setDisabled(distanceInput, false);
         setDisabled(fuelRadios, false);
+        // 給油は必須にして「未選択」はなしなので、最初は未選択の状態にしない
+        for (const f of fuelRadios) {
+          f.checked = false;
+        }
         // Clear start field
         startTimeInput.value = '';
       } else {
@@ -197,14 +210,14 @@
         distanceInput.value = '';
         setDisabled(fuelRadios, true);
         for (const f of fuelRadios) {
-          f.checked = f.value === '';
+          f.checked = false;
         }
       }
     }
 
     function getNowISOStringLocal() {
       const dt = new Date();
-      // ISOのタイムゾーン情報は外し、ローカルの日時をISO形式に変換(yyyy-MM-ddTHH:mm)
+      // ローカル日時をISO形式yyyy-MM-ddTHH:mmで返す
       const pad = v => v.toString().padStart(2, '0');
       const yyyy = dt.getFullYear();
       const MM = pad(dt.getMonth() + 1);
@@ -226,20 +239,6 @@
 
     // 初期化
     updateFormState();
-
-    // テキストデータを作成する関数
-    function formatData(data) {
-      return (
-        `登録日時: ${data.timestamp}\n` +
-        `車両: ${data.car}\n` +
-        `利用タイプ: ${data.usageType === 'start' ? '利用開始' : '利用終了'}\n` +
-        `日時: ${data.usageDateTime}\n` +
-        (data.usageType === 'end'
-          ? `走行距離: ${data.distance} km\n給油の有無: ${data.fuel}\n`
-          : '') +
-        '-----\n'
-      );
-    }
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -272,7 +271,7 @@
         }
       }
 
-      let distance = null;
+      let distance = '';
       let fuel = '';
 
       if (usageType === 'end') {
@@ -283,39 +282,38 @@
           return;
         }
 
-        for(const f of fuelRadios) {
-          if(f.checked) {
-            fuel = f.value;
-            break;
-          }
-        }
+        // 給油の有無は必須なのでチェック
+        fuel = Array.from(fuelRadios).find(r => r.checked)?.value || '';
         if (fuel === '') {
           alert('利用終了時は給油の有無を選択してください。');
           return;
         }
       }
 
-      const data = {
-        car,
-        usageType,
-        usageDateTime,
-        distance,
-        fuel,
-        timestamp,
-      };
+      // カンマ区切り、項目名は不要、未選択燃料は含めない（未選択なしなので不要）
+      // 順序: 車両, 利用タイプ(start/end), 利用日時, 距離(利用終了のみ), 給油(利用終了のみ)
+      let lineParts = [car, usageType, usageDateTime];
+      if (usageType === 'end') {
+        lineParts.push(distance);
+        lineParts.push(fuel);
+      }
+      const line = lineParts.join(',');
 
-      const textData = formatData(data);
+      // ローカルストレージに追記
+      const current = getStoredLog();
+      const newLog = current ? current + '\n' + line : line;
+      localStorage.setItem('carUsageLog', newLog);
 
-      message.textContent = textData;
+      message.textContent =
+        '登録内容（CSV形式1行）をローカルストレージに保存しました。\n\n' + line +
+        '\n\n「output.txt」ファイルをダウンロードしてください。';
 
-      // ダウンロードファイル名
-      const fileName = `${car.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp.replace(/[:.]/g, '-')}.txt`;
-
-      const blob = new Blob([textData], { type: 'text/plain' });
+      // localStorageの内容をダウンロード用テキスト作成
+      const blob = new Blob([newLog], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName;
+      a.download = 'output.txt';
       document.body.appendChild(a);
       a.click();
       a.remove();
